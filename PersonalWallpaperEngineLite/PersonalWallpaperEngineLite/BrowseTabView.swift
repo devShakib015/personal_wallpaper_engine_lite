@@ -13,7 +13,8 @@ private final class PreviewPanelController: NSObject, NSWindowDelegate {
         currentViewModel = viewModel
 
         let onDismiss = { [weak self, weak viewModel] in
-            Task { @MainActor in viewModel?.previewPhoto = nil }
+            let vm = viewModel
+            Task { @MainActor in vm?.previewPhoto = nil }
             self?.panel?.close()
             self?.panel = nil
         }
