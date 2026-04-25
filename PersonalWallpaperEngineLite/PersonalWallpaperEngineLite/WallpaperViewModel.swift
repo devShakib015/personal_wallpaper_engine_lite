@@ -12,6 +12,9 @@ final class WallpaperViewModel: ObservableObject {
     @Published var selectedCategories: Set<WallpaperCategory> {
         didSet { saveCategories() }
     }
+    @Published var customCategories: [String] {
+        didSet { saveCustomCategories() }
+    }
     @Published var autoChangeEnabled: Bool {
         didSet {
             UserDefaults.standard.set(autoChangeEnabled, forKey: "auto_change_enabled")
@@ -54,6 +57,7 @@ final class WallpaperViewModel: ObservableObject {
     init() {
         let cats = WallpaperViewModel.loadCategories()
         self.selectedCategories = cats.isEmpty ? [.nature] : cats
+        self.customCategories = WallpaperViewModel.loadCustomCategories()
         self.autoChangeEnabled = UserDefaults.standard.bool(forKey: "auto_change_enabled")
         let interval = UserDefaults.standard.integer(forKey: "auto_change_interval")
         self.autoChangeInterval = interval == 0 ? 30 : interval
@@ -63,10 +67,28 @@ final class WallpaperViewModel: ObservableObject {
         resetTimer()
     }
 
+    // MARK: - Custom category management
+
+    func addCustomCategory(_ term: String) {
+        let cleaned = term.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !cleaned.isEmpty, !customCategories.contains(cleaned) else { return }
+        customCategories.append(cleaned)
+    }
+
+    func removeCustomCategory(_ term: String) {
+        customCategories.removeAll { $0 == term }
+    }
+
+    // All active query terms (preset + custom) as strings
+    var activeQueryTerms: [String] {
+        selectedCategories.map(\.rawValue) + customCategories
+    }
+
     // MARK: - Public actions
 
     func fetchAndSetRandomWallpaper() {
-        guard !selectedCategories.isEmpty else {
+        let terms = activeQueryTerms
+        guard !terms.isEmpty else {
             errorMessage = "Select at least one category."
             return
         }
@@ -74,7 +96,7 @@ final class WallpaperViewModel: ObservableObject {
         statusMessage = "Fetching wallpaper…"
         errorMessage = nil
 
-        UnsplashService.shared.fetchRandomPhoto(from: Array(selectedCategories)) { [weak self] result in
+        UnsplashService.shared.fetchRandomPhoto(from: terms) { [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 switch result {
@@ -90,9 +112,10 @@ final class WallpaperViewModel: ObservableObject {
     }
 
     func loadPhotoGrid() {
-        guard !selectedCategories.isEmpty else { return }
+        let terms = activeQueryTerms
+        guard !terms.isEmpty else { return }
         isLoading = true
-        UnsplashService.shared.fetchPhotos(from: Array(selectedCategories)) { [weak self] result in
+        UnsplashService.shared.fetchPhotos(from: terms) { [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.isLoading = false
@@ -209,5 +232,13 @@ final class WallpaperViewModel: ObservableObject {
             return []
         }
         return Set(raw.compactMap { WallpaperCategory(rawValue: $0) })
+    }
+
+    private func saveCustomCategories() {
+        UserDefaults.standard.set(customCategories, forKey: "custom_categories")
+    }
+
+    private static func loadCustomCategories() -> [String] {
+        return UserDefaults.standard.stringArray(forKey: "custom_categories") ?? []
     }
 }

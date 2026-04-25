@@ -5,6 +5,9 @@ import AppKit
 
 struct HomeTabView: View {
     @ObservedObject var viewModel: WallpaperViewModel
+    @State private var newCategoryText: String = ""
+    @State private var showAddField: Bool = false
+    @FocusState private var addFieldFocused: Bool
 
     var body: some View {
         ScrollView {
@@ -62,26 +65,72 @@ struct HomeTabView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                // Active categories chips
+                // Categories section
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Active Categories")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 6) {
+                    HStack {
+                        Text("Categories")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button(action: {
+                            showAddField.toggle()
+                            if showAddField { addFieldFocused = true }
+                            else { newCategoryText = "" }
+                        }) {
+                            Image(systemName: showAddField ? "xmark.circle.fill" : "plus.circle.fill")
+                                .font(.caption)
+                                .foregroundColor(showAddField ? .secondary : .accentColor)
+                        }
+                        .buttonStyle(.plain)
+                        .help(showAddField ? "Cancel" : "Add custom category")
+                    }
+
+                    // Preset chips
+                    FlowLayout(spacing: 6) {
                         ForEach(WallpaperCategory.allCases) { cat in
                             CategoryChip(
-                                category: cat,
+                                label: cat.displayName,
+                                icon: cat.icon,
                                 isSelected: viewModel.selectedCategories.contains(cat),
+                                isCustom: false,
                                 action: {
                                     if viewModel.selectedCategories.contains(cat) {
-                                        if viewModel.selectedCategories.count > 1 {
+                                        if viewModel.activeQueryTerms.count > 1 {
                                             viewModel.selectedCategories.remove(cat)
                                         }
                                     } else {
                                         viewModel.selectedCategories.insert(cat)
                                     }
-                                }
+                                },
+                                onDelete: nil
                             )
+                        }
+
+                        // Custom chips
+                        ForEach(viewModel.customCategories, id: \.self) { term in
+                            CategoryChip(
+                                label: term.capitalized,
+                                icon: "tag",
+                                isSelected: true,
+                                isCustom: true,
+                                action: { viewModel.removeCustomCategory(term) },
+                                onDelete: { viewModel.removeCustomCategory(term) }
+                            )
+                        }
+                    }
+
+                    // Inline add field
+                    if showAddField {
+                        HStack(spacing: 6) {
+                            TextField("e.g. cyberpunk, forest, anime…", text: $newCategoryText)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.caption)
+                                .focused($addFieldFocused)
+                                .onSubmit { submitCustomCategory() }
+                            Button("Add") { submitCustomCategory() }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                                .disabled(newCategoryText.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
                     }
                 }
@@ -108,22 +157,84 @@ struct HomeTabView: View {
             .padding(12)
         }
     }
+
+    private func submitCustomCategory() {
+        viewModel.addCustomCategory(newCategoryText)
+        newCategoryText = ""
+        showAddField = false
+        addFieldFocused = false
+    }
+}
+
+// MARK: - Flow Layout (wraps chips like text)
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth, x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: maxWidth, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX, x > bounds.minX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
 }
 
 // MARK: - Category Chip
 
 struct CategoryChip: View {
-    let category: WallpaperCategory
+    let label: String
+    let icon: String
     let isSelected: Bool
+    let isCustom: Bool
     let action: () -> Void
+    let onDelete: (() -> Void)?
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: category.icon)
+        Button(action: isCustom ? {} : action) {
+            HStack(spacing: 3) {
+                Image(systemName: icon)
                     .font(.caption2)
-                Text(category.displayName)
+                Text(label)
                     .font(.caption)
+                if let onDelete {
+                    Button(action: onDelete) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 1)
+                }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)

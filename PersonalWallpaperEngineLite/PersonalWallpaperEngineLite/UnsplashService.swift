@@ -11,8 +11,8 @@ final class UnsplashService {
 
     private let baseURL = "https://api.unsplash.com"
 
-    // Returns a single random photo for one of the provided categories
-    func fetchRandomPhoto(from categories: [WallpaperCategory],
+    // Returns a single random photo for the provided query terms
+    func fetchRandomPhoto(from queries: [String],
                           completion: @escaping (Result<UnsplashPhoto, Error>) -> Void) {
         let key = accessKey
         guard !key.isEmpty else {
@@ -20,7 +20,7 @@ final class UnsplashService {
             return
         }
 
-        let query = categories.map(\.rawValue).joined(separator: ",")
+        let query = queries.joined(separator: ",")
         var components = URLComponents(string: "\(baseURL)/photos/random")!
         components.queryItems = [
             URLQueryItem(name: "query", value: query),
@@ -53,7 +53,7 @@ final class UnsplashService {
     }
 
     // Fetch a page of photos for the grid preview
-    func fetchPhotos(from categories: [WallpaperCategory],
+    func fetchPhotos(from queries: [String],
                      page: Int = 1,
                      perPage: Int = 20,
                      completion: @escaping (Result<[UnsplashPhoto], Error>) -> Void) {
@@ -63,7 +63,7 @@ final class UnsplashService {
             return
         }
 
-        let query = categories.map(\.rawValue).joined(separator: ",")
+        let query = queries.joined(separator: ",")
         var components = URLComponents(string: "\(baseURL)/search/photos")!
         components.queryItems = [
             URLQueryItem(name: "query", value: query),
