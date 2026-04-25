@@ -1,0 +1,211 @@
+name: Build & Release DMG
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'          # Trigger on version tags: v1.0.0, v1.2.3, etc.
+  workflow_dispatch:       # Allow manual trigger from GitHub Actions UI
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+env:
+  PROJECT_PATH: PersonalWallpaperEngineLite/PersonalWallpaperEngineLite.xcodeproj
+  SCHEME: PersonalWallpaperEngineLite
+  APP_NAME: PersonalWallpaperEngineLite
+  BUNDLE_ID: com.devshakib.PersonalWallpaperEngineLite
+  DERIVED_DATA: ${{ github.workspace }}/DerivedData
+  ARCHIVE_PATH: ${{ github.workspace }}/build/PersonalWallpaperEngineLite.xcarchive
+  EXPORT_PATH: ${{ github.workspace }}/build/export
+  DMG_PATH: ${{ github.workspace }}/build/PersonalWallpaperEngineLite.dmg
+
+jobs:
+  build-and-release:
+    name: Build, Package & Release
+    runs-on: macos-14        # Apple Silicon runner (Xcode 15+)
+
+    steps:
+      # ──────────────────────────────────────────
+      # 1. Checkout
+      # ──────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ──────────────────────────────────────────
+      # 2. Resolve version string
+      # ──────────────────────────────────────────
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "TAG=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${VERSION}"
+
+      # ──────────────────────────────────────────
+      # 3. Select Xcode version
+      # ──────────────────────────────────────────
+      - name: Select Xcode 15
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      # ──────────────────────────────────────────
+      # 4. Import signing certificate (optional)
+      #    Skip if CODE_SIGN_IDENTITY is not set — builds unsigned for direct distribution
+      # ──────────────────────────────────────────
+      - name: Import signing certificate
+        if: ${{ env.APPLE_CERTIFICATE != '' }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $RUNNER_TEMP/certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          echo "Signing certificate imported."
+
+      # ──────────────────────────────────────────
+      # 5. Build archive
+      # ──────────────────────────────────────────
+      - name: Build Archive
+        run: |
+          mkdir -p "${{ env.DERIVED_DATA }}" "$(dirname '${{ env.ARCHIVE_PATH }}')"
+          xcodebuild archive \
+            -project "${{ env.PROJECT_PATH }}" \
+            -scheme "${{ env.SCHEME }}" \
+            -configuration Release \
+            -archivePath "${{ env.ARCHIVE_PATH }}" \
+            -derivedDataPath "${{ env.DERIVED_DATA }}" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            MARKETING_VERSION="${{ steps.version.outputs.VERSION }}" \
+            | xcpretty || cat /var/folders/*/*/com.apple.dt.xcode*/objs/*/build.log 2>/dev/null || true
+
+      # ──────────────────────────────────────────
+      # 6. Export .app from archive
+      # ──────────────────────────────────────────
+      - name: Export app
+        run: |
+          mkdir -p "${{ env.EXPORT_PATH }}"
+          # Copy directly from archive (no signing required for direct distribution)
+          cp -R "${{ env.ARCHIVE_PATH }}/Products/Applications/${{ env.APP_NAME }}.app" \
+                "${{ env.EXPORT_PATH }}/"
+          echo "App exported to ${{ env.EXPORT_PATH }}"
+          ls -la "${{ env.EXPORT_PATH }}"
+
+      # ──────────────────────────────────────────
+      # 7. Create DMG with create-dmg (brew)
+      # ──────────────────────────────────────────
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create DMG
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          DMG_NAME="PersonalWallpaperEngineLite-${VERSION}.dmg"
+          DMG_OUTPUT="${{ github.workspace }}/build/${DMG_NAME}"
+
+          create-dmg \
+            --volname "Personal Wallpaper Engine Lite" \
+            --volicon "${{ env.EXPORT_PATH }}/${{ env.APP_NAME }}.app/Contents/Resources/AppIcon.icns" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "${{ env.APP_NAME }}.app" 170 190 \
+            --hide-extension "${{ env.APP_NAME }}.app" \
+            --app-drop-link 430 190 \
+            --no-internet-enable \
+            "${DMG_OUTPUT}" \
+            "${{ env.EXPORT_PATH }}/" \
+          || \
+          create-dmg \
+            --volname "Personal Wallpaper Engine Lite" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "${{ env.APP_NAME }}.app" 170 190 \
+            --hide-extension "${{ env.APP_NAME }}.app" \
+            --app-drop-link 430 190 \
+            --no-internet-enable \
+            "${DMG_OUTPUT}" \
+            "${{ env.EXPORT_PATH }}/"
+
+          echo "DMG_NAME=${DMG_NAME}" >> $GITHUB_OUTPUT
+          echo "DMG_OUTPUT=${DMG_OUTPUT}" >> $GITHUB_OUTPUT
+          ls -lh "${DMG_OUTPUT}"
+        id: dmg
+
+      # ──────────────────────────────────────────
+      # 8. Generate release notes from git log
+      # ──────────────────────────────────────────
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^v${VERSION}$" | head -1)
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges | head -30)
+          else
+            CHANGES=$(git log --pretty=format:"- %s" --no-merges | head -30)
+          fi
+          echo "CHANGES<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # ──────────────────────────────────────────
+      # 9. Upload DMG as workflow artifact
+      # ──────────────────────────────────────────
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PersonalWallpaperEngineLite-${{ steps.version.outputs.VERSION }}-dmg
+          path: ${{ github.workspace }}/build/*.dmg
+          retention-days: 30
+
+      # ──────────────────────────────────────────
+      # 10. Create GitHub Release
+      # ──────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: "Personal Wallpaper Engine Lite ${{ steps.version.outputs.VERSION }}"
+          draft: false
+          prerelease: false
+          body: |
+            ## Personal Wallpaper Engine Lite ${{ steps.version.outputs.VERSION }}
+
+            A lightweight macOS menubar app to auto-fetch and set beautiful wallpapers from Unsplash.
+
+            ### Install
+            1. Download `PersonalWallpaperEngineLite-${{ steps.version.outputs.VERSION }}.dmg` below
+            2. Open the DMG and drag the app to **Applications**
+            3. Launch from Applications — look for the 📷 icon in your menu bar
+            4. Go to **Settings** tab and paste your free [Unsplash API key](https://unsplash.com/developers)
+
+            > **Note:** On first launch macOS may show a security warning. Right-click the app → Open → Open to bypass Gatekeeper for unsigned builds.
+
+            ### What's new
+            ${{ steps.notes.outputs.CHANGES }}
+
+            ### Requirements
+            - macOS 13.0 (Ventura) or later
+          files: |
+            ${{ github.workspace }}/build/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
