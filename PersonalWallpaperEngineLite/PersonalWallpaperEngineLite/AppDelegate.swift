@@ -29,9 +29,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.target = self
         }
 
-        // Close the empty Settings window SwiftUI opens automatically
+        // Close any zero-size placeholder window SwiftUI creates on launch
         DispatchQueue.main.async {
-            NSApp.windows.forEach { $0.close() }
+            NSApp.windows
+                .filter { $0.contentViewController is NSHostingController<AnyView> == false
+                          && !($0.contentViewController is NSHostingController<MenubarPopoverView>) }
+                .filter { $0.frame.size == .zero || $0.contentView?.subviews.isEmpty == true }
+                .forEach { $0.orderOut(nil) }
         }
     }
 
