@@ -35,16 +35,16 @@ final class WallpaperViewModel: ObservableObject {
     }
     @Published var apiKey: String {
         didSet {
-            UserDefaults.standard.set(apiKey, forKey: "unsplash_access_key")
+            UserDefaults.standard.set(apiKey, forKey: "pexels_api_key")
         }
     }
 
     // MARK: Runtime state
-    @Published var photos: [UnsplashPhoto] = []
+    @Published var photos: [PexelsPhoto] = []
     @Published var isLoading: Bool = false
     @Published var statusMessage: String = "Ready"
     @Published var errorMessage: String? = nil
-    @Published var previewPhoto: UnsplashPhoto? = nil
+    @Published var previewPhoto: PexelsPhoto? = nil
     @Published var currentWallpaperThumbnail: NSImage? = nil
     @Published var nextChangeIn: String = ""
 
@@ -62,7 +62,7 @@ final class WallpaperViewModel: ObservableObject {
         let interval = UserDefaults.standard.integer(forKey: "auto_change_interval")
         self.autoChangeInterval = interval == 0 ? 30 : interval
         self.launchAtStartup = UserDefaults.standard.bool(forKey: "launch_at_startup")
-        self.apiKey = UserDefaults.standard.string(forKey: "unsplash_access_key") ?? ""
+        self.apiKey = UserDefaults.standard.string(forKey: "pexels_api_key") ?? ""
 
         resetTimer()
     }
@@ -127,10 +127,10 @@ final class WallpaperViewModel: ObservableObject {
         }
     }
 
-    func setWallpaper(photo: UnsplashPhoto) {
+    func setWallpaper(photo: PexelsPhoto) {
         isLoading = true
         statusMessage = "Downloading…"
-        UnsplashService.shared.downloadImage(urlString: photo.urls.full) { [weak self] result in
+        UnsplashService.shared.downloadImage(urlString: photo.src.original) { [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 switch result {
@@ -186,8 +186,8 @@ final class WallpaperViewModel: ObservableObject {
 
     // MARK: - Private helpers
 
-    private func downloadAndSet(photo: UnsplashPhoto) {
-        UnsplashService.shared.downloadImage(urlString: photo.urls.full) { [weak self] result in
+    private func downloadAndSet(photo: PexelsPhoto) {
+        UnsplashService.shared.downloadImage(urlString: photo.src.original) { [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.isLoading = false

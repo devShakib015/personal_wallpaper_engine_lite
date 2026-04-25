@@ -26,14 +26,14 @@
         <false/>
         <key>NSExceptionDomains</key>
         <dict>
-            <key>unsplash.com</key>
+            <key>pexels.com</key>
             <dict>
                 <key>NSExceptionAllowsInsecureHTTPLoads</key>
                 <false/>
                 <key>NSIncludesSubdomains</key>
                 <true/>
             </dict>
-            <key>images.unsplash.com</key>
+            <key>images.pexels.com</key>
             <dict>
                 <key>NSExceptionAllowsInsecureHTTPLoads</key>
                 <false/>

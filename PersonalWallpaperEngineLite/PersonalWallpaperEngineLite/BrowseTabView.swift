@@ -64,7 +64,7 @@ struct BrowseTabView: View {
 // MARK: - Photo Thumbnail
 
 struct PhotoThumbnailView: View {
-    let photo: UnsplashPhoto
+    let photo: PexelsPhoto
     let onTap: () -> Void
     @State private var image: NSImage? = nil
 
@@ -90,7 +90,7 @@ struct PhotoThumbnailView: View {
 
     private func loadThumb() {
         guard image == nil else { return }
-        UnsplashService.shared.downloadImage(urlString: photo.urls.small) { result in
+        UnsplashService.shared.downloadImage(urlString: photo.src.small) { result in
             if case .success(let data) = result, let img = NSImage(data: data) {
                 DispatchQueue.main.async { self.image = img }
             }
@@ -101,7 +101,7 @@ struct PhotoThumbnailView: View {
 // MARK: - Preview Sheet
 
 struct PhotoPreviewSheet: View {
-    let photo: UnsplashPhoto
+    let photo: PexelsPhoto
     @ObservedObject var viewModel: WallpaperViewModel
     @Environment(\.dismiss) var dismiss
     @State private var image: NSImage? = nil
@@ -125,7 +125,7 @@ struct PhotoPreviewSheet: View {
                 }
             }
 
-            if let desc = photo.altDescription ?? photo.description {
+            if let desc = photo.alt, !desc.isEmpty {
                 Text(desc)
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -158,7 +158,7 @@ struct PhotoPreviewSheet: View {
     }
 
     private func loadPreview() {
-        UnsplashService.shared.downloadImage(urlString: photo.urls.regular) { result in
+        UnsplashService.shared.downloadImage(urlString: photo.src.large) { result in
             if case .success(let data) = result, let img = NSImage(data: data) {
                 DispatchQueue.main.async { self.image = img }
             }

@@ -12,12 +12,12 @@ struct SettingsTabView: View {
             VStack(alignment: .leading, spacing: 16) {
 
                 // API Key
-                settingSection(title: "Unsplash API Key") {
+                settingSection(title: "Pexels API Key") {
                     VStack(alignment: .leading, spacing: 4) {
-                        SecureField("Paste your Access Key here", text: $viewModel.apiKey)
+                        SecureField("Paste your API Key here", text: $viewModel.apiKey)
                             .textFieldStyle(.roundedBorder)
                             .font(.caption)
-                        Text("Get a free key at unsplash.com/developers")
+                        Text("Get a free key at pexels.com/api — it's completely free")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }

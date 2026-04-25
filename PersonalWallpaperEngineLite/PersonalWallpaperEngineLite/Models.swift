@@ -1,23 +1,31 @@
 import Foundation
 
-// MARK: - Unsplash Models
+// MARK: - Pexels Models
 
-struct UnsplashPhoto: Identifiable, Codable {
-    let id: String
-    let urls: PhotoURLs
-    let description: String?
-    let altDescription: String?
+struct PexelsPhoto: Identifiable, Codable {
+    let id: Int
+    let width: Int
+    let height: Int
+    let url: String
+    let photographer: String
+    let src: PhotoSrc
+    let alt: String?
 
-    enum CodingKeys: String, CodingKey {
-        case id, urls, description
-        case altDescription = "alt_description"
-    }
+    // Identifiable conformance needs String-based id for SwiftUI ForEach
+    var stringId: String { String(id) }
 }
 
-struct PhotoURLs: Codable {
-    let raw: String
-    let full: String
-    let regular: String
+extension PexelsPhoto {
+    // Make Identifiable use the integer id directly
+    typealias ID = Int
+}
+
+struct PhotoSrc: Codable {
+    let original: String
+    let large2x: String
+    let large: String
+    let medium: String
     let small: String
-    let thumb: String
+    let landscape: String
+    let tiny: String
 }
