@@ -81,7 +81,15 @@ jobs:
           echo "Exported successfully:"
           ls -la "${EXPORT}/"
 
-      # ── 6. Install create-dmg ─────────────────────────────────────────────
+      # ── 6. Ad-hoc codesign (prevents "damaged app" Gatekeeper error) ────────
+      - name: Ad-hoc codesign
+        run: |
+          APP="${{ github.workspace }}/build/export/${{ env.APP_NAME }}.app"
+          codesign --force --deep --sign - "${APP}"
+          echo "Codesign status: $?"
+          codesign --verify --deep --strict "${APP}" && echo "Signature valid"
+
+      # ── 7. Install create-dmg ─────────────────────────────────────────────
       - name: Install create-dmg
         run: brew install create-dmg
 
@@ -147,15 +155,15 @@ jobs:
           body: |
             ## Personal Wallpaper Engine Lite ${{ steps.version.outputs.VERSION }}
 
-            A lightweight macOS menubar app to auto-fetch and set beautiful wallpapers from Unsplash.
+            A lightweight macOS menubar app that keeps your desktop fresh with beautiful wallpapers — powered by the free Pexels API.
 
             ### Install
             1. Download `${{ steps.dmg.outputs.DMG_NAME }}` below
             2. Open the DMG and drag the app to **Applications**
             3. Launch from Applications — look for the 📷 icon in your menu bar
-            4. Click the icon → **Settings** tab → paste your free [Unsplash API key](https://unsplash.com/developers)
+            4. Click the icon → **Settings** tab → paste your free [Pexels API key](https://www.pexels.com/api/)
 
-            > **Gatekeeper warning?** Right-click the app → Open → Open (only needed once for unsigned builds)
+            > **Gatekeeper warning on older builds?** Right-click the app → Open → Open (this build is ad-hoc signed so it should open directly)
 
             ### Changes
             ${{ steps.notes.outputs.CHANGES }}
