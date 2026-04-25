@@ -1,6 +1,56 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Preview Panel Controller
+
+private final class PreviewPanelController: NSObject, NSWindowDelegate {
+    static let shared = PreviewPanelController()
+    private var panel: NSPanel?
+    private weak var currentViewModel: WallpaperViewModel?
+
+    func open(photo: PexelsPhoto, viewModel: WallpaperViewModel) {
+        panel?.close()
+        currentViewModel = viewModel
+
+        let onDismiss = { [weak self, weak viewModel] in
+            viewModel?.previewPhoto = nil
+            self?.panel?.close()
+            self?.panel = nil
+        }
+        let content = PhotoPreviewContent(photo: photo, viewModel: viewModel, onDismiss: onDismiss)
+        let hosting = NSHostingController(rootView: content)
+
+        let newPanel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 820, height: 580),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        newPanel.title = photo.alt ?? "Photo Preview"
+        newPanel.isReleasedWhenClosed = false
+        newPanel.minSize = NSSize(width: 500, height: 380)
+        newPanel.contentViewController = hosting
+        newPanel.delegate = self
+        newPanel.center()
+        newPanel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        panel = newPanel
+    }
+
+    func close() {
+        panel?.close()
+        panel = nil
+    }
+
+    // Called when user clicks the panel's X button
+    func windowWillClose(_ notification: Notification) {
+        let vm = currentViewModel
+        Task { @MainActor in vm?.previewPhoto = nil }
+        panel = nil
+        currentViewModel = nil
+    }
+}
+
 // MARK: - Browse Tab (photo grid + preview)
 
 struct BrowseTabView: View {
@@ -55,8 +105,16 @@ struct BrowseTabView: View {
                 }
             }
         }
-        .sheet(item: $viewModel.previewPhoto) { photo in
-            PhotoPreviewSheet(photo: photo, viewModel: viewModel)
+        .onChange(of: viewModel.previewPhoto?.id) { newID in
+            if let photo = viewModel.previewPhoto {
+                PreviewPanelController.shared.open(photo: photo, viewModel: viewModel)
+            } else {
+                PreviewPanelController.shared.close()
+            }
+        }
+        .onDisappear {
+            PreviewPanelController.shared.close()
+            viewModel.previewPhoto = nil
         }
     }
 }
@@ -98,50 +156,56 @@ struct PhotoThumbnailView: View {
     }
 }
 
-// MARK: - Preview Sheet
+// MARK: - Photo Preview Content (rendered in floating NSPanel)
 
-struct PhotoPreviewSheet: View {
+struct PhotoPreviewContent: View {
     let photo: PexelsPhoto
     @ObservedObject var viewModel: WallpaperViewModel
-    @Environment(\.dismiss) var dismiss
+    let onDismiss: () -> Void
     @State private var image: NSImage? = nil
-    @State private var isLoading = false
 
     var body: some View {
         VStack(spacing: 12) {
-            // Image
             Group {
                 if let img = image {
                     Image(nsImage: img)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: 280)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 } else {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.secondary.opacity(0.1))
-                        .frame(height: 200)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .overlay(ProgressView())
                 }
             }
 
             if let desc = photo.alt, !desc.isEmpty {
                 Text(desc)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
 
             HStack(spacing: 12) {
-                Button("Cancel") { dismiss() }
+                Button("Close") { onDismiss() }
                     .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Text("📷 \(photo.photographer)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Spacer()
 
                 Button(action: {
                     viewModel.setWallpaper(photo: photo)
-                    dismiss()
+                    onDismiss()
                 }) {
-                    HStack {
+                    HStack(spacing: 6) {
                         if viewModel.isLoading {
                             ProgressView().scaleEffect(0.7).frame(width: 14, height: 14)
                         }
@@ -152,13 +216,13 @@ struct PhotoPreviewSheet: View {
                 .disabled(viewModel.isLoading)
             }
         }
-        .padding(16)
-        .frame(minWidth: 360)
+        .padding(20)
+        .frame(minWidth: 500, minHeight: 380)
         .onAppear { loadPreview() }
     }
 
     private func loadPreview() {
-        UnsplashService.shared.downloadImage(urlString: photo.src.large) { result in
+        UnsplashService.shared.downloadImage(urlString: photo.src.large2x) { result in
             if case .success(let data) = result, let img = NSImage(data: data) {
                 DispatchQueue.main.async { self.image = img }
             }

@@ -28,6 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.action = #selector(togglePopover(_:))
             button.target = self
         }
+
+        // Close the empty Settings window SwiftUI opens automatically
+        DispatchQueue.main.async {
+            NSApp.windows.forEach { $0.close() }
+        }
     }
 
     @objc private func togglePopover(_ sender: AnyObject?) {

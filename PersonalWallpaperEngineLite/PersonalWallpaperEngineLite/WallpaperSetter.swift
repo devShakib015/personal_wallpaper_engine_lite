@@ -7,9 +7,9 @@ enum WallpaperSetter {
     /// Sets the given image file URL as desktop wallpaper on all connected screens.
     @discardableResult
     static func set(imageData: Data) -> Bool {
-        // Write to a temp file
+        // Write to a uniquely-named temp file so macOS doesn't skip re-applying the same URL
         let tempDir = FileManager.default.temporaryDirectory
-        let fileURL = tempDir.appendingPathComponent("wpe_wallpaper.jpg")
+        let fileURL = tempDir.appendingPathComponent("wpe_wallpaper_\(UUID().uuidString).jpg")
 
         do {
             try imageData.write(to: fileURL, options: .atomic)
