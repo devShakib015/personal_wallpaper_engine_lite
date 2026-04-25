@@ -115,7 +115,9 @@ final class WallpaperViewModel: ObservableObject {
         let terms = activeQueryTerms
         guard !terms.isEmpty else { return }
         isLoading = true
-        UnsplashService.shared.fetchPhotos(from: terms) { [weak self] result in
+        photos = []   // clear immediately so UI shows spinner
+        let randomPage = Int.random(in: 1...10)
+        UnsplashService.shared.fetchPhotos(from: terms, page: randomPage, perPage: 50) { [weak self] result in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.isLoading = false

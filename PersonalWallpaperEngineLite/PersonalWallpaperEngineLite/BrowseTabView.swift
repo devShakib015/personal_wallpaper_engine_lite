@@ -181,12 +181,30 @@ struct PhotoPreviewContent: View {
                 }
             }
 
-            if let desc = photo.alt, !desc.isEmpty {
-                Text(desc)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
+            // Alt text + clickable Pexels link
+            VStack(spacing: 4) {
+                if let desc = photo.alt, !desc.isEmpty {
+                    Text(desc)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
+                if let pageURL = URL(string: photo.url) {
+                    Button(action: { NSWorkspace.shared.open(pageURL) }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.caption2)
+                            Text(photo.url)
+                                .font(.caption2)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open on Pexels")
+                }
             }
 
             HStack(spacing: 12) {
